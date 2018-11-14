@@ -1,1 +1,1 @@
-# intensional-receive-Message-Passing-
+# intensional-receive
