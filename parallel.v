@@ -1,6 +1,16 @@
 (** * Parallel: Working with Parallel composition *)
 
-Require Export Induction.
+(*Require Export Induction.*)
+Require Import Coq.Arith.Arith.
+Require Import Coq.Bool.Bool.
+Require Import Coq.Strings.String.
+Require Import Omega.
+Require Import Coq.Arith.EqNat.
+Require Import Coq.Classes.RelationClasses.
+Require Import Coq.Logic.FunctionalExtensionality.
+
+Require Import Coq.Strings.Ascii.
+Require Import Coq.Strings.String.
 
 (** Parallel Composition **)
 
@@ -16,19 +26,19 @@ Inductive comp (A : Type) : Type :=
  | empty_comp : comp A
  | par_comp : A -> comp A -> comp A.
 
-Implicit Arguments empty_comp [A].
+(*Implicit Arguments empty_comp [A].*)
 
 Infix "|:" := par_comp (at level 60, right associativity).
 
 Theorem empty_cons : forall (A:Type)(x:A) (l:comp A), 
-  empty_comp <> x |: l.
- intros.
+  empty_comp A <> x |: l.
+ intros. 
  discriminate.
 Qed.
 
 Fixpoint app (A : Type)(l m:comp A) : comp A :=
   match l with
-  | empty_comp => m
+  | empty_comp _ => m
   | a |: l' => a |: (app l' m)
   end.
 
@@ -36,8 +46,8 @@ Fixpoint app (A : Type)(l m:comp A) : comp A :=
 (* Two processes are structurally congruent, if they are identical up to structure. *)
 Inductive congruence (A : Type) : comp A -> comp A -> Prop :=
 | no_pro : forall P, 
-            congruence P (app P empty_comp)
-| commutative : forall P Q, 
+            congruence P (app P (empty_comp A))
+| commutative : forall P Q,  
                          congruence (app P Q) (app Q P)
 | associative : forall P Q R, 
                        congruence (app P (app Q R)) 
@@ -61,7 +71,7 @@ Check congruence.
 Print congruence.
 
 Inductive comp_operation (A : Type) : comp A -> comp A-> Prop :=
-| par1 : comp_operation empty_comp empty_comp
+| par1 : comp_operation (empty_comp _) (empty_comp _)
 | par2 : forall Q R Q',
             comp_operation Q Q' ->
             comp_operation (app Q R) (app Q' R)
@@ -81,7 +91,7 @@ comp_operation P P''.
 Proof.
  intros A P P' H.
  induction H.
- exists empty_comp.
+ exists (empty_comp A).
  split.
  apply same.
  apply par1.
@@ -105,7 +115,7 @@ congruence Q Q'.
 Proof.
  intros A P Q H.
  destruct H.
- exists empty_comp.
+ exists (empty_comp A).
  intros.
  apply same.
  exists (app Q' R).
@@ -137,7 +147,7 @@ comp_operation P' Q.
 Proof.
  intros A P Q H.
  induction H.
- exists empty_comp.
+ exists (empty_comp A).
  split.
  apply same.
  apply par1.
@@ -163,8 +173,8 @@ congruence P P'.
 Proof.
  intros A P Q H.
  induction H.
- exists empty_comp.
- exists empty_comp.
+ exists (empty_comp A).
+ exists (empty_comp A).
  split.
  apply par1.
  split.
@@ -208,7 +218,7 @@ Qed.
 
 (** P |+| no_process == P **)
 Theorem congruence_no_process : forall (A : Type) (P : comp A),
-congruence (app P empty_comp) P.
+congruence (app P (empty_comp _)) P.
 Proof.
  intros A P.
  apply symmetric.
@@ -217,7 +227,7 @@ Qed.
 
 (** P == P |+| no_process **)
 Theorem congruence_no_process' : forall (A : Type) (P : comp A),
-congruence P (app P empty_comp).
+congruence P (app P (empty_comp _)).
 Proof.
  intros A P.
  apply symmetric.
@@ -243,7 +253,7 @@ Hypothesis eq_A : forall (A : Type) (x y : A), {x = y}+{x <> y}.
 (* override updates a type p in the program P with p1. *)
 Fixpoint override (A : Type ) (p : A) (P : comp A) (p1 : A) : comp A :=
 match P with 
-| empty_comp => empty_comp
+| empty_comp _=> empty_comp _
 | p' |: P' => match eq_A p p' with 
                | left _ => p1 |: P'
                | right _ => p' |: override p P' p1
@@ -253,7 +263,7 @@ end.
 (* in_comp states that process P is present in composition. *)
 Fixpoint  in_comp (A : Type) (Q : A) (P : comp A) : bool :=
 match P with 
-| empty_comp => false
+| empty_comp _ => false
 | P1 |: P1' => match eq_A Q P1 with 
                      | left _ => true
                      | right _ => in_comp Q P1'
@@ -263,21 +273,21 @@ end.
 (** Remove process from the parallel composition **)
  Fixpoint remove (A : Type) (x : A) (l : comp A) : comp A :=
     match l with
-      | empty_comp => empty_comp
+      | empty_comp _ => empty_comp _
       | y |: tl => if (eq_A x y) then remove x tl else y |: (remove x tl)
     end.
 
 (* Subset *)
 Fixpoint is_subset (A : Type) (P : comp A) (P' : comp A) : bool :=
 match P with 
-| empty_comp => true 
+| empty_comp _ => true 
 | P1 |: P1' => if (in_comp P1 P') then (is_subset P1' (remove P1 P1')) else false
 end.
 
 (* Number of entity in the parallel composition. *)
 Fixpoint number (A : Type) (P : comp A) : nat :=
 match P with 
-| empty_comp => 0
+| empty_comp _=> 0
 | P1 |: P1' => S (number P1')
 end.
 
@@ -288,7 +298,7 @@ Variable P3 : Type.
 Variable P4 : Type.
 Variable P5 : Type.
 
-Example test_number_parallel1:  number (P1 |: (P2 |: (P3 |: empty_comp))) = 3.
+Example test_number_parallel1:  number (P1 |: (P2 |: (P3 |: empty_comp _))) = 3.
 Proof.
 reflexivity.
 Qed.
@@ -297,18 +307,18 @@ Qed.
 (** The [add_comp] a entity to the existing parallel composition .**)
 Fixpoint add_comp (A : Type) (P : comp A) (P1 : A) : comp A :=
  match P with 
-  | empty_comp => P1 |: empty_comp
+  | empty_comp _ => P1 |: empty_comp _
   | Q |: P' => Q |: (add_comp P' P1)
  end.
 
-Example test_add_comp1:  add_comp (P1 |: (P2 |: (P3 |: empty_comp))) P4 = 
-(P1 |: (P2 |: (P3 |: (P4 |: empty_comp)))).
+Example test_add_comp1:  add_comp (P1 |: (P2 |: (P3 |: empty_comp _))) P4 = 
+(P1 |: (P2 |: (P3 |: (P4 |: empty_comp _)))).
 Proof.
 reflexivity.
 Qed.
 
-Example test_add_comp2:  add_comp empty_comp P4 = 
-(P4 |: empty_comp).
+Example test_add_comp2:  add_comp (empty_comp _) P4 = 
+(P4 |: empty_comp _).
 Proof.
 reflexivity.
 Qed.
@@ -321,8 +331,8 @@ is_subset P Q = true /\ is_subset Q P = true.
 Axiom equal_comp : forall (A : Type) (P Q : comp A),
 same_comp P Q -> P = Q.
 
-Example test_override_1 : forall (A : Type) (P1 P1' : comp A), override P1 empty_comp P1' = 
-empty_comp.
+Example test_override_1 : forall (A : Type) (P1 P1' : comp A), override P1 (empty_comp _) P1' = 
+(empty_comp _).
 Proof.
 reflexivity.
 Qed.

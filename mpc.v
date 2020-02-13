@@ -1,6 +1,7 @@
-Require Export SfLib.
-Require Export Smallstep.
+Add LoadPath "/Users/swarnpriya/Desktop/masters/intensional-receive".
+Require Import SfLib.
 Require Export parallel.
+Import ListNotations.
 
 (* TYPES *)
 
@@ -89,14 +90,41 @@ Definition mail_box := list exp.
     e2 are either equal or not equal. *)
 Hypothesis is_equal_exp : forall e e' : exp, {e = e'} + {e <> e'}.
 
+Theorem eq_id_dec : forall id1 id2 : id, {id1 = id2} + {id1 <> id2}.
+Proof.
+   intros id1 id2.
+   destruct id1 as [n1]. destruct id2 as [n2].
+   destruct (eq_nat_dec n1 n2) as [Heq | Hneq].
+   (*Case "n1 = n2".*)
+     left. rewrite Heq. reflexivity.
+   (*Case "n1 \u2260 n2".*)
+     right. intros contra. inversion contra. apply Hneq. apply H0.
+Defined.
+
+Lemma eq_id : forall (T:Type) x (p q:T),
+              (if eq_id_dec x x then p else q) = p.
+Proof.
+  intros.
+  destruct (eq_id_dec x x); try reflexivity.
+  apply ex_falso_quodlibet; auto.
+Qed.
+
+Lemma neq_id : forall (T:Type) x y (p q:T), x <> y ->
+               (if eq_id_dec x y then p else q) = q.
+Proof.
+  intros. destruct (eq_id_dec x y).
+  apply H in e. inversion e.
+  reflexivity.
+Qed.
+
 (* This lemma states that if x extends the typing context ctxt then
     id x is assigned some type T if both ids are equal. *)
 Lemma extend_eq : forall A (ctxt: partial_map A) x T,
- (extend ctxt x T) x = Some T.
+ extend ctxt x T x = Some T.
 Proof.
  intros. 
  unfold extend. 
- rewrite eq_id.
+ rewrite <- beq_id_refl.
  auto.
 Qed.
 
@@ -104,12 +132,12 @@ Qed.
     we are trying to assign type to x1 where x1 is not equal to x2 
     then x1 will be assigned some other type in typing context ctxt. *)
 Lemma extend_neq : forall A (ctxt: partial_map A) x1 T x2,
- x2 <> x1 ->
+ beq_id x2 x1 = false ->
  (extend ctxt x2 T) x1 = ctxt x1.
 Proof.
  intros. 
  unfold extend. 
- rewrite neq_id; auto.
+ rewrite H. auto.
 Qed.
 
 (* process_conf represents process configuration where 
@@ -295,7 +323,7 @@ Qed.
     is present in the global_conf or not *)
 Fixpoint is_mem_process_global_conf (p : exp) (P : global_conf) : bool :=
 match P with 
- | empty_comp => false
+ | empty_comp _ => false
  | (Sigma sts e M' p1) |: P1' => match is_equal_exp 
    p p1 with 
  | left _ => true
@@ -1407,6 +1435,7 @@ Axiom var_subst_comm : forall x T C C' e Gamma,
  has_type Gamma e T C' ->
  subtype_cty C' C.
 
+
 (** SUBSTITUTION PRESERVE TYPING **)
 
 (* Substitution preserve typing says that suppose we
@@ -1493,7 +1522,8 @@ simpl; inversion H1; subst ; simpl...
 - rename i into y. rename t into T11. 
  apply T_abs_exp... 
  destruct (eq_id_dec x y). subst.
- eapply context_invariance...subst. 
+ eapply context_invariance...
+ subst. 
  intros x Hafi. unfold extend. 
  destruct (eq_id_dec y x)...
  apply IHe. eapply context_invariance... 
@@ -1508,7 +1538,9 @@ simpl; inversion H1; subst ; simpl...
 (* Var *)
 - rename i into y.
  destruct (eq_id_dec x y). subst.
- rewrite extend_eq in H2.
+ unfold extend in H2.
+ destruct (eq_id_dec y y) in H2.
+ (*rewrite extend_eq in H2.*)
  inversion H2; subst. clear H2.
  apply subsume_cty with C'.
  eapply context_invariance...
@@ -1520,8 +1552,11 @@ simpl; inversion H1; subst ; simpl...
  assumption. apply context_invariance with empty.
  assumption. intros x H'. 
  destruct (free_in_context _ _ C C' empty H') as [T' HT'].
- assumption. inversion HT'.
- apply T_var_exp... rewrite extend_neq in H2... 
+ assumption. inversion HT'. destruct n. reflexivity. 
+ apply T_var_exp...
+ unfold extend in H2. 
+ destruct (eq_id_dec x y). destruct n. assumption.
+ assumption.
 (* Unit *)
 - apply T_unit_exp.
 (* Nat *)
@@ -1995,7 +2030,7 @@ Lemma mover_properties : forall a a' tr v p p' P P' tr1 tr2 K K1' K2' K'',
   Qed.
 
 Theorem congruence_no_process' : forall  (P : comp process_conf),
-congruence P (app P empty_comp).
+congruence P (app P (empty_comp _)).
 Proof.
 intros P.
 apply symmetric.
@@ -2036,7 +2071,7 @@ Inductive reduction : global_conf -> list action -> global_conf -> Prop :=
    (Sigma st2 e2 M2 v') |: P'').
 
 Lemma reduction_send3 : forall T x v''' e v'' M p st' e' M' P a 
-st'' e'' M'' st''' e''' M''' v' P' v,value v ->reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (send_exp v e) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (send_exp v e'') M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
+st'' e'' M'' st''' e''' M''' v' P' v,value v ->reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (send_exp v e) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (send_exp v e'') M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
 Proof.
  intros.
  inversion H0. subst.
@@ -2054,7 +2089,7 @@ Proof.
 Qed.
 
 Lemma reduction_send4 : forall T x v''' M p st' e' M' P a st'' M'' 
-st''' e''' M''' v' P' v e2 e1 e1',reduction (Sigma (st_decl T x v''') e1 (v :: M) 
+st''' e''' M''' v' P' v e2 e1 e1',reduction (Sigma (st_decl T x v''') e1 (v :: M) 
 (val_exp p) |: (Sigma st' e' M' v') |: P) a 
 (Sigma st'' e1' M'' (val_exp p) |: 
 (Sigma st''' e''' M''' v') |: P') ->
@@ -2079,7 +2114,7 @@ Proof.
 Qed.
 
 Lemma reduction_send2 : forall T x v''' e v'' M p st' e' M' P a st'' 
-e'' M'' st''' e''' M''' v' P' v,value v ->reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (send_exp e v) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (send_exp e'' v) M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
+e'' M'' st''' e''' M''' v' P' v,value v ->reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (send_exp e v) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (send_exp e'' v) M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
 Proof.
  intros.
  inversion H0. subst.
@@ -2096,11 +2131,11 @@ Proof.
  assumption. assumption.
 Qed.
 
-Lemma reduction_send1 : forall T x v''' v'' M p st' e' M' v' v P,value v ->
-value v' ->reduction (Sigma (st_decl T x v''') (send_exp v v') 
+Lemma reduction_send1 : forall T x v''' v'' M p st' e' M' v' v P,value v ->
+value v' ->reduction (Sigma (st_decl T x v''') (send_exp v v') 
 (v'' :: M) (val_exp p) |: 
 (Sigma st' e' M' v) |: P) 
-((send v' (val_exp p) v) :: nil)(Sigma (st_decl T x v''') v' (v'' :: M) 
+((send v' (val_exp p) v) :: nil)(Sigma (st_decl T x v''') v' (v'' :: M) 
 (val_exp p) |: 
 (Sigma st' e' (append_mail_box M' v') v) |: P).
 Proof.
@@ -2110,8 +2145,8 @@ Proof.
  assumption. assumption.
 Qed.
 
-Lemma reduction_state_asgn1 : forall T x v''' v'' M p st' e' M' v' v P,value v ->
-value v' ->reduction (Sigma (st_decl T x v''') (set_exp v') 
+Lemma reduction_state_asgn1 : forall T x v''' v'' M p st' e' M' v' v P,value v ->
+value v' ->reduction (Sigma (st_decl T x v''') (set_exp v') 
 (v :: M) (val_exp p) |: 
 (Sigma st' e' M' v'') |: P) 
 [(set (val_exp p))]
@@ -2124,7 +2159,7 @@ Proof.
 Qed.
 
 Lemma reduction_state2 : forall T x v''' e v'' M p st' e' M' P 
-a st'' e'' M'' st''' e''' M''' v' P',reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (set_exp e) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (set_exp e'') M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
+a st'' e'' M'' st''' e''' M''' v' P',reduction (Sigma (st_decl T x v''') e (v'' :: M)(val_exp p) |: (Sigma st' e' M' v') |: P) a (Sigma st'' e'' M'' (val_exp p) |:(Sigma st''' e''' M''' v') |: P') ->reduction (Sigma (st_decl T x v''') (set_exp e) (v'' :: M) (val_exp p) |:(Sigma st' e' M' v') |: P) a(Sigma st'' (set_exp e'') M'' (val_exp p) |: (Sigma st''' e''' M''' v') |: P').
 Proof.
  intros.
  inversion H. subst.
@@ -2140,7 +2175,7 @@ Proof.
  assumption.
 Qed.
 
-Lemma reduction_state_read : forall T x v'' M p st' e' M' v' v P,value v ->reduction (Sigma (st_decl T x v) (get_exp) (v' :: M) 
+Lemma reduction_state_read : forall T x v'' M p st' e' M' v' v P,value v ->reduction (Sigma (st_decl T x v) (get_exp) (v' :: M) 
 (val_exp p) |: (Sigma st' e' M' v'') |: P) 
 [(get (val_exp p))]
 (Sigma (st_decl T x v) v (v' :: M) (val_exp p) |: 
@@ -2152,8 +2187,8 @@ Proof.
 Qed.
 
 Lemma reduction_receive1 : forall T x v'' M p st' e' M' v' v P e
-x' T' e'',value v ->
-has_type empty v T null ->reduction (Sigma (st_decl T' x' v'') 
+x' T' e'',value v ->
+has_type empty v T null ->reduction (Sigma (st_decl T' x' v'') 
 (receive_exp x T e e') (v :: M) (val_exp p) |: 
 (Sigma st' e'' M' v') |: P) 
 [(receive v (val_exp p))]
@@ -2168,8 +2203,8 @@ Proof.
 Qed.
 
 Lemma reduction_receive2 : forall T'' T x v'' M p st' e' M' v' v P e
-x' T' e'',value v ->
-has_type empty v T'' null ->reduction  (Sigma (st_decl T' x' v'') 
+x' T' e'',value v ->
+has_type empty v T'' null ->reduction  (Sigma (st_decl T' x' v'') 
 (receive_exp x T e e') (v :: M) (val_exp p) |: 
 (Sigma st' e'' M' v') |: P) 
 [(receive v (val_exp p))]
@@ -2182,7 +2217,7 @@ Proof.
  assumption.
 Qed.
 
-Lemma reduction_become : forall T x v'' M p st' e' M' v' v P e,reduction (Sigma (st_decl T x v'') (become_exp e) 
+Lemma reduction_become : forall T x v'' M p st' e' M' v' v P e,reduction (Sigma (st_decl T x v'') (become_exp e) 
 (v :: M) (val_exp p) |: 
 (Sigma st' e' M' v') |: P) 
 [(become (val_exp p))]
@@ -2199,7 +2234,7 @@ v1 v''' x' T' M'' e'' st'',
 default v' T ->
 fresh v (Sigma (st_decl T' x' v''') 
 (spawn_exp x T e) (v1 :: M) (val_exp p) |: 
-(Sigma st'' e'' M'' v'') |: P) ->reduction (Sigma (st_decl T' x' v''') (spawn_exp x T e) 
+(Sigma st'' e'' M'' v'') |: P) ->reduction (Sigma (st_decl T' x' v''') (spawn_exp x T e) 
 (v1 :: M) (val_exp p) |: 
 (Sigma st'' e'' M'' v'') |: P) 
 [(spawn (val_exp p) v)]
@@ -2215,7 +2250,7 @@ Proof.
 Qed.
 
 Lemma reduction_self : forall T x v'' M p v' v P
-M' e' st',reduction (Sigma (st_decl T x v'') (self_exp) 
+M' e' st',reduction (Sigma (st_decl T x v'') (self_exp) 
 (v :: M) (val_exp p) |: 
 (Sigma st' e' M' v') |: P) 
 [(self)]
