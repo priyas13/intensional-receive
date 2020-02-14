@@ -1,4 +1,4 @@
-Add LoadPath "/Users/swarnpriya/Desktop/masters/intensional-receive".
+(*Add LoadPath "/Users/swarnpriya/Desktop/masters/intensional-receive".*)
 Require Import SfLib.
 Require Export parallel.
 Import ListNotations.
